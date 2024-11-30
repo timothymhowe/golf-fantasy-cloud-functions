@@ -1,6 +1,10 @@
 import pytest
+import sqlalchemy
+import os
 from unittest.mock import patch, Mock
-from src.utils.db.db_connector import get_db_config, clean_env, get_db_connection
+from src.utils.db.db_connector import get_db_config, clean_env, get_db_connection, cleanup
+
+from dotenv import load_dotenv
 
 
 @pytest.fixture
@@ -78,3 +82,39 @@ def test_get_db_connection_failure(mock_create_engine, mock_sql_connector, mock_
         creator()
     
     assert "Connection failed" in str(exception.value)
+    
+    
+@pytest.mark.integration
+def test_integration():
+    """Integration test for the real database connection
+    Requires:
+    - Network access to google cloud sql instance
+    - Valid .env.local file with real credentials
+    """
+    required_vars = ['DB_USER', 'DB_PASS', 'INSTANCE_CONNECTION_STRING_FULL', 'DB_NAME']
+    
+    # Clear existing env vars
+    for var in required_vars:
+        if var in os.environ:
+            del os.environ[var]
+    
+    load_dotenv('.env.local')
+    
+    print("\nEnvironment variables:")
+    for var in required_vars:
+        value = os.getenv(var)
+        masked_value = '***' if var in ['DB_PASS'] else value
+        print(f"{var}: {masked_value}")
+    
+    if not all([os.getenv(var) for var in required_vars]):
+        pytest.skip("Integration test skipped. Missing required environment variables.")
+        
+    try:
+        engine = get_db_connection()
+        with engine.connect() as connection:
+            result = connection.execute(sqlalchemy.text("SELECT 1"))
+            assert result.fetchone()[0] == 1
+    except Exception as e:
+        pytest.fail(f"Integration test failed: {e}")
+    finally:
+        cleanup()
