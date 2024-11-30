@@ -4,7 +4,7 @@ Tests for database client functionality
 
 import pytest
 from unittest.mock import Mock
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from src.tournament_field.db_client import get_upcoming_tournament, update_tournament_entries
@@ -20,13 +20,13 @@ MOCK_FIELD_DATA = {
         },
         "entry_list": [
             {
-                "player_id": "100240",
+                "player_id": 100240,
                 "first_name": "Tyson",
                 "last_name": "Alexander",
                 "country": "USA"
             },
             {
-                "player_id": "103138",
+                "player_id": 103138,
                 "first_name": "Erik",
                 "last_name": "Barnes",
                 "country": "USA"
@@ -48,21 +48,23 @@ def db_session():
         id=1,
         tournament_name="Charles Schwab Challenge",
         start_date=datetime.now().date(),
-        sportcontent_api_id="659"
+        sportcontent_api_id=659
     )
     
     golfers = [
         Golfer(
-            id=1,
+            id="G100240",
             first_name="Tyson",
             last_name="Alexander",
-            sportcontent_api_id="100240"
+            full_name="Tyson Alexander",
+            sportcontent_api_id=100240
         ),
         Golfer(
-            id=2,
+            id="G103138",
             first_name="Erik",
             last_name="Barnes",
-            sportcontent_api_id="103138"
+            full_name="Erik Barnes",
+            sportcontent_api_id=103138
         )
     ]
     
@@ -76,11 +78,18 @@ def db_session():
 
 def test_get_upcoming_tournament_success(db_session):
     """Test successful retrieval of upcoming tournament"""
+    # Use tomorrow's date to ensure it's upcoming
+    tomorrow = datetime.now().date() + timedelta(days=1)
+    
+    tournament = db_session.query(Tournament).first()
+    tournament.start_date = tomorrow
+    db_session.commit()
+    
     result = get_upcoming_tournament(db_session)
     
     assert result is not None
     assert result["id"] == 1
-    assert result["sportcontent_api_id"] == "659"
+    assert result["sportcontent_api_id"] == 659
     assert result["tournament_name"] == "Charles Schwab Challenge"
 
 def test_get_upcoming_tournament_none(db_session):
@@ -108,7 +117,7 @@ def test_update_tournament_entries_success(db_session):
     assert entry.tournament_id == 1
     assert entry.is_most_recent is True
     assert entry.is_active is True
-    assert str(datetime.now().year) == entry.year
+    assert str(datetime.now().year) == str(entry.year)
 
 def test_update_tournament_entries_existing_entries(db_session):
     """Test updating entries when previous entries exist"""
